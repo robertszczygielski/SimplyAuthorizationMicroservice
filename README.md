@@ -1,1 +1,1 @@
-# SimplyAuthorizationMocroservice
+# SimplyAuthorizationMicroservice
