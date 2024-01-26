@@ -1,15 +1,14 @@
 package pl.dicedev.simplyauth.service;
 
 import org.springframework.stereotype.Service;
+import pl.dicedev.simplyauth.bto.FakeUserCredentials;
 import pl.dicedev.simplyauth.dto.AuthDto;
+import pl.dicedev.simplyauth.dto.UserIdDto;
 import pl.dicedev.simplyauth.dto.UserNameDto;
 import pl.dicedev.simplyauth.exception.ValidationException;
 
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @Service
 public class AuthenticationService {
@@ -20,24 +19,32 @@ public class AuthenticationService {
     private static final String CREDENTIALS_SEPARATOR = ":";
     private static final String TOKEN_SEPARATOR = ";";
 
-
-    private Map<String, String> userDataMap = new HashMap<>() {{
-        put("test", "test");
-        put("gracz1", "gracz1");
-    }};
-    private Map<String, String> userScopeMap = new HashMap<>() {{
-        put("test", "user-test-scope");
-        put("gracz1", "user-gracz1-scope");
+    private List<FakeUserCredentials> users = new ArrayList<>() {{
+        add(FakeUserCredentials.builder()
+                .id(UUID.fromString("53346916-54d4-4ce8-a539-b6813a47f6f5"))
+                .name("test")
+                .password("test")
+                .scope("user-test-scope")
+                .build());
+        add(FakeUserCredentials.builder()
+                .id(UUID.fromString("e1a84ff3-add8-4c71-8990-f92896587658"))
+                .name("gracz1")
+                .password("gracz1")
+                .scope("user-gracz1-scope")
+                .build());
     }};
 
     public AuthDto getAuthentication(String credentials) {
         String[] userData = credentials.split(CREDENTIALS_SEPARATOR);
         validCredentials(userData);
 
+        FakeUserCredentials userCredentials = getUserName(userData[0]);
+
         String tokenMap =
-                "userName=" + userData[0] +
+                "userName=" + userCredentials.getName() +
                         ";validTime=" + Instant.now().plusSeconds(TOKEN_VALIDITY_IN_SECONDS).toString() +
-                        ";scope=" + userScopeMap.get(userData[0]);
+                        ";scope=" + userCredentials.getScope() +
+                        ";id=" + userCredentials.getId();
 
         String token = Base64.getEncoder().withoutPadding().encodeToString(tokenMap.getBytes());
 
@@ -50,9 +57,9 @@ public class AuthenticationService {
         String[] userDataName = userDataRows[0].split("=");
         String[] userDataTime = userDataRows[1].split("=");
         String[] userDataScope = userDataRows[2].split("=");
-        if (!userDataMap.containsKey(userDataName[1])) {
-            throw new ValidationException("Invalid token");
-        }
+
+        getUserName(userDataName[1]);
+
         Instant date = Instant.parse(userDataTime[1]);
         if (Instant.now().isAfter(date)) {
             throw new ValidationException("Token Expired");
@@ -64,9 +71,8 @@ public class AuthenticationService {
         byte[] userDataByte = Base64.getDecoder().decode(token.getBytes());
         String[] userDataRows = new String(userDataByte).split(TOKEN_SEPARATOR);
         String[] userDataName = userDataRows[0].split("=");
-        if (!userDataMap.containsKey(userDataName[1])) {
-            throw new ValidationException("Invalid token");
-        }
+
+        getUserName(userDataName[1]);
 
         return new UserNameDto(userDataName[1]);
     }
@@ -75,18 +81,45 @@ public class AuthenticationService {
         if (userData.length != 2) {
             throw new ValidationException("User or password are incorrect");
         }
-        if (!userDataMap.containsKey(userData[0])) {
-            throw new ValidationException("User/password incorrect");
-        }
-        if (!userDataMap.get(userData[0]).equals(userData[1])) {
+
+        FakeUserCredentials userCredentials = getUserName(userData[0]);
+
+        if (!userCredentials.getPassword().equals(userData[1])) {
             throw new ValidationException("Check User and password");
         }
     }
 
-    public boolean createUser(String username, String password, String scope) {
-        userDataMap.put(username, password);
-        userScopeMap.put(username, Objects.requireNonNullElse(scope, "user-scope"));
+    public boolean createUser(String id, String username, String password, String scope) {
+        users.add(
+                FakeUserCredentials.builder()
+                        .id(UUID.fromString(id))
+                        .scope(Objects.requireNonNullElse(scope, "user-scope"))
+                        .name(username)
+                        .password(password)
+                        .build()
+        );
 
         return true;
+    }
+
+    public UserIdDto getId(String token) {
+        byte[] userDataByte = Base64.getDecoder().decode(token.getBytes());
+        String[] userDataRows = new String(userDataByte).split(TOKEN_SEPARATOR);
+        String[] userDataId = userDataRows[3].split("=");
+
+        return new UserIdDto(userDataId[1]);
+    }
+
+    private FakeUserCredentials getUserName(String username) {
+
+        Optional<FakeUserCredentials> userCredentialsOptional = users.stream()
+                .filter(u -> u.getName().equalsIgnoreCase(username))
+                .findFirst();
+
+        if (userCredentialsOptional.isEmpty()) {
+            throw new ValidationException("User/password incorrect");
+        }
+
+        return userCredentialsOptional.get();
     }
 }
