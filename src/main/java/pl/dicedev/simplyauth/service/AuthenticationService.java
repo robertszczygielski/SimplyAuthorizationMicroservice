@@ -2,9 +2,11 @@ package pl.dicedev.simplyauth.service;
 
 import org.springframework.stereotype.Service;
 import pl.dicedev.simplyauth.bto.FakeUserCredentials;
+import pl.dicedev.simplyauth.builders.TokenBuilder;
 import pl.dicedev.simplyauth.dto.AuthDto;
 import pl.dicedev.simplyauth.dto.UserIdDto;
 import pl.dicedev.simplyauth.dto.UserNameDto;
+import pl.dicedev.simplyauth.dto.UserScopeDto;
 import pl.dicedev.simplyauth.exception.ValidationException;
 
 import java.time.Instant;
@@ -40,13 +42,14 @@ public class AuthenticationService {
 
         FakeUserCredentials userCredentials = getUserName(userData[0]);
 
-        String tokenMap =
-                "userName=" + userCredentials.getName() +
-                        ";validTime=" + Instant.now().plusSeconds(TOKEN_VALIDITY_IN_SECONDS).toString() +
-                        ";scope=" + userCredentials.getScope() +
-                        ";id=" + userCredentials.getId();
+        String tokenFromBuilder = TokenBuilder.builder(TOKEN_SEPARATOR)
+                .withId(userCredentials.getId().toString())
+                .withUserName(userCredentials.getName())
+                .withScope(userCredentials.getScope())
+                .withValidTime(TOKEN_VALIDITY_IN_SECONDS)
+                .build();
 
-        String token = Base64.getEncoder().withoutPadding().encodeToString(tokenMap.getBytes());
+        String token = Base64.getEncoder().withoutPadding().encodeToString(tokenFromBuilder.getBytes());
 
         return new AuthDto(token);
     }
@@ -121,5 +124,13 @@ public class AuthenticationService {
         }
 
         return userCredentialsOptional.get();
+    }
+
+    public UserScopeDto getUserScope(String token) {
+        byte[] userDataByte = Base64.getDecoder().decode(token.getBytes());
+        String[] userDataRows = new String(userDataByte).split(TOKEN_SEPARATOR);
+        String[] userDataScope = userDataRows[2].split("=");
+
+        return new UserScopeDto(userDataScope[1]);
     }
 }
