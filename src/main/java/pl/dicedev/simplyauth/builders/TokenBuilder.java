@@ -8,7 +8,7 @@ public class TokenBuilder {
     private String validTime;
     private String scope;
     private String id;
-    private String tokenSeparator;
+    private final String tokenSeparator;
 
     public TokenBuilder(String tokenSeparator) {
         this.tokenSeparator = tokenSeparator;
